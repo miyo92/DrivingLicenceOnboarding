@@ -113,7 +113,7 @@ public sealed class WorkflowProcessor(
                 }
                 else
                 {
-                    application.TransitionTo(ApplicationStatus.PendingManualReview, WorkflowEvent.ManualReviewRequired, string.Join("; ", flags), now);
+                    application.TransitionTo(ApplicationStatus.PendingManualReview, WorkflowEvent.ManualReviewRequired, string.Join(RiskAssessor.FlagSeparator, flags), now);
                 }
 
                 break;

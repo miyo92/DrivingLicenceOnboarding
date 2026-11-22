@@ -86,6 +86,26 @@ public class RiskAssessorTests
             result);
     }
 
+    [Theory]
+    [InlineData("Applicant is below 21", "Applicant is below 21")]
+    [InlineData("National ID on watchlist", "Flagged for manual review")]
+    [InlineData("Applicant is below 21; National ID on watchlist", "Applicant is below 21")]
+    [InlineData(
+        "Applicant is below 21; Licence category C requires manual review; National ID on watchlist; Photo quality score 50 is below review threshold 70",
+        "Applicant is below 21; Licence category C requires manual review; Photo quality score 50 is below review threshold 70")]
+    public void PublicDetails_withholds_only_the_watchlist_flag(string recorded, string shown)
+    {
+        Assert.Equal(shown, RiskAssessor.PublicDetails(recorded));
+    }
+
+    [Fact]
+    public void PublicDetails_round_trips_what_Assess_records()
+    {
+        var flags = _assessor.Assess(Clean() with { DateOfBirth = new DateOnly(2007, 1, 1), NationalId = "WL000001" }, 85, AsOf);
+
+        Assert.Equal("Applicant is below 21", RiskAssessor.PublicDetails(string.Join(RiskAssessor.FlagSeparator, flags)));
+    }
+
     [Fact]
     public void Watchlist_and_threshold_come_from_options()
     {

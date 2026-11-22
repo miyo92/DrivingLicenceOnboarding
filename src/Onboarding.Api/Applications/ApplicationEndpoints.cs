@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Onboarding.Core.Applications;
+using Onboarding.Core.Eligibility;
 using Onboarding.Infrastructure.Logging;
 using Onboarding.Infrastructure.Persistence;
 using Onboarding.Infrastructure.Photos;
@@ -172,7 +173,13 @@ public static class ApplicationEndpoints
             .Select(h => new HistoryEntryResponse(h.OccurredAt, h.FromStatus, h.ToStatus, h.Event, h.Details))
             .ToListAsync(ct);
 
-        return Results.Ok(entries);
+        // The watchlist flag stays in the database and worker logs only: returning it here would let anyone submit a
+        // national ID and read back whether it is on the watchlist. Other risk reasons are shown as recorded.
+        var visible = entries.Select(e => e.Event == WorkflowEvent.ManualReviewRequired && e.Details is not null
+            ? e with { Details = RiskAssessor.PublicDetails(e.Details) }
+            : e);
+
+        return Results.Ok(visible.ToList());
     }
 
     private static readonly string[] SubmissionFields =

@@ -65,7 +65,7 @@ curl -X POST -H "Content-Type: application/json" \
 dotnet test
 ```
 
-781 unit tests (state machine, eligibility rules, manual review) in `tests/Onboarding.UnitTests`. They need no
+786 unit tests (state machine, eligibility rules, manual review) in `tests/Onboarding.UnitTests`. They need no
 Docker. `global.json` opts into Microsoft.Testing.Platform, which `dotnet test` requires on the .NET 10 SDK.
 
 ### Reset
@@ -162,7 +162,10 @@ Ages are computed on the submission date (UTC); someone born on 29 February turn
 The quality score is `SHA-256(photo bytes)` reduced to 0–100: deterministic (the same file always scores the same)
 without pretending to analyse the image. Thresholds, supported types, minimum size and the watchlist are
 configurable (see *Configuration*). The exact rule messages end up in history `details`, e.g.
-`"Applicant is below 21"` or `"nationalId is required; Email address is invalid"`.
+`"Applicant is below 21"` or `"nationalId is required; Email address is invalid"`. One exception: the watchlist
+flag (`"National ID on watchlist"`) is stored in history and logged by the worker, but the history endpoint leaves it
+out (showing `"Flagged for manual review"` when it was the only reason), so the API cannot be used to look up whether
+an ID is on the watchlist.
 
 ---
 
@@ -381,6 +384,10 @@ curl -s -u onboarding:onboarding -H "content-type: application/json" \
 ## Shortcuts
 
 - No authentication or authorization — the manual-review endpoints are open.
+- The status still reveals a watchlist hit: an application that passes every other risk rule but lands in
+  `PendingManualReview` must have been flagged by the watchlist. The history endpoint hides the reason, but anyone can
+  submit a national ID and infer the result. Authentication and per-client rate limiting (see *Production
+  improvements*) would make such lookups slow and traceable.
 - Swagger UI is enabled in every environment, and credentials are plain values in `docker-compose.yml`.
 - No submission idempotency key: retrying the POST creates a second application.
 - No integration tests in the repository; the end-to-end, crash, race and failure scenarios above were run
@@ -392,7 +399,7 @@ curl -s -u onboarding:onboarding -H "content-type: application/json" \
 ## Production improvements
 
 - **Auth:** authentication for all endpoints; a reviewer role for approve/reject; the reviewer's identity recorded
-  in the audit trail.
+  in the audit trail; per-client rate limiting on submissions.
 - **Submission idempotency key** (`Idempotency-Key` header with a unique index) so client retries don't create
   duplicates; optionally duplicate detection per national ID.
 - **Photo storage:** blob storage (S3 / Azure Blob) with private access, a cleanup job for orphaned uploads,
