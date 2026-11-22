@@ -1,0 +1,88 @@
+name: licence-onboarding
+
+x-postgres-connection: &postgres-connection "Host=db;Port=5432;Database=onboarding;Username=onboarding;Password=onboarding;Timeout=5"
+
+x-app-environment: &app-environment
+  ConnectionStrings__Postgres: *postgres-connection
+  RabbitMq__HostName: queue
+  RabbitMq__UserName: onboarding
+  RabbitMq__Password: onboarding
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: onboarding
+      POSTGRES_USER: onboarding
+      POSTGRES_PASSWORD: onboarding
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onboarding -d onboarding"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  queue:
+    image: rabbitmq:4.1-management
+    environment:
+      RABBITMQ_DEFAULT_USER: onboarding
+      RABBITMQ_DEFAULT_PASS: onboarding
+    ports:
+      - "5672:5672"
+      - "15672:15672" # management UI
+    volumes:
+      - queue-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Onboarding.Api/Dockerfile
+    environment: *app-environment
+    ports:
+      - "8080:8080"
+    volumes:
+      - photos:/data/photos
+    depends_on:
+      db:
+        condition: service_healthy
+      queue:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 10s
+
+  worker:
+    build:
+      context: .
+      dockerfile: src/Onboarding.Worker/Dockerfile
+    environment: *app-environment
+    volumes:
+      - photos:/data/photos
+    depends_on:
+      # api applies the schema migration on startup.
+      api:
+        condition: service_healthy
+      queue:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  db-data:
+  queue-data:
+  photos:
